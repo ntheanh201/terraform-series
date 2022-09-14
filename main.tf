@@ -73,6 +73,8 @@ resource "aws_subnet" "public_subnet" {
   }
 }
 
+# Internet Gateway
+
 resource "aws_internet_gateway" "internet_gateway" {
   vpc_id = aws_vpc.vpc.id
 
@@ -98,4 +100,40 @@ resource "aws_route_table_association" "public_association" {
   for_each       = {for k, v in aws_subnet.public_subnet : k => v}
   subnet_id      = each.value.id
   route_table_id = aws_route_table.public.id
+}
+
+# NAT Gateway
+resource "aws_eip" "nat" {
+  vpc = true
+}
+
+resource "aws_nat_gateway" "public" {
+  subnet_id = aws_subnet.public_subnet[0].id
+
+  depends_on    = [aws_internet_gateway.internet_gateway]
+  allocation_id = aws_eip.nat.id
+
+  tags = {
+    Name = "Public NAT"
+  }
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.public.id
+  }
+
+  tags = {
+    Name = "private"
+  }
+}
+
+resource "aws_route_table_association" "public_private" {
+  route_table_id = aws_route_table.private.id
+
+  for_each  = {for k, v in aws_subnet.private_subnet : k => v}
+  subnet_id = each.value.id
 }
